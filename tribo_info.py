@@ -8,6 +8,7 @@ import re
 # all_info = {"tribes": {"tribe1": {"player1": {"id": 12345, "points": 123, "info": "msg"},
 #                                   "player2": {"id": 12346, "info": "msg"}},
 #                        "tribe2": {}}}
+world = 57
 
 
 class Run(object):
@@ -49,11 +50,42 @@ class Run(object):
         print self.all_info
 
     def add_new_player(self, new_player_name, tribe):
-        self.all_info["tribes"][tribe][new_player_name] = {"info": ""}
+        self.all_info["tribes"][tribe][new_player_name] = {"info": "", "id": "", "score": ""}
 
-    def modify_tribe(self, tribe, new_tribe_name):
-        self.all_info["tribes"][new_tribe_name] = self.all_info["tribes"][tribo]
-        del self.all_info["tribes"][tribo]
+    def update_tribe(self, tribe, new_tribe_name):
+        self.all_info["tribes"][new_tribe_name] = self.all_info["tribes"][tribe]
+        del self.all_info["tribes"][tribe]
+
+    def update_score(self, player_name, tribe):
+        pat = '<td><span class="world">PT57</span></td>\n<td>(.*)</td>\n.*id=(.*)".*\n<td>(.*)</td>\n<td>(.*)</td>.*'
+        url = 'http://pt.twstats.com/index.php?page=search&name={}&type=player'.format(player_name)
+        sock = urllib.urlopen(url)
+        # print sock
+        # print re.search(pat, sock.read()).group()
+        sock = urllib.urlopen(url)
+        position, id_player, points, n_villages = re.search(pat, sock.read()).groups()
+        sock = urllib.urlopen(url)
+        sock.close()
+        self.all_info["tribes"][tribe][player_name]["position"] = position
+        self.all_info["tribes"][tribe][player_name]["id"] = id_player
+        self.all_info["tribes"][tribe][player_name]["points"] = int(points.replace(",", ""))
+        # self.all_info["tribes"][tribe][player_name]["n_villages"] = n_villages
+        print "ok"
+        self.save_file()
+
+    def update_all_scores(self):
+        for tribe in self.all_info["tribes"]:
+            print tribe
+            for player in self.all_info["tribes"][tribe]:
+                print player
+                try:
+                    self.update_score(player, tribe)
+                except Exception as e:
+                    print e
+                    exit(0)
+                    continue
+        self.save_file()
+        # raw_input()
 
     def delete_tribe(self, tribe):
         del self.all_info["tribes"][tribe]
@@ -67,7 +99,6 @@ class Run(object):
             time.sleep(3)
 
     def check_if_the_tribe_exist(self, tribe):
-        print self.all_info
         if tribe in self.all_info["tribes"]:
             return True
         return False
@@ -78,13 +109,26 @@ class Run(object):
                 return tribe
         return False
 
-    def option_sa(self):
+    def option_sa(self):  # see alphabetical ordered
         # print self.all_info
         for tribe in self.all_info["tribes"]:
             print "\n{}:".format(tribe)
             for player in sorted(self.all_info["tribes"][tribe], key=lambda s: s.lower()):
-                info = self.all_info["tribes"][tribe][player]
-                print "\t{}:\t{}".format(player, info)
+                info = self.all_info["tribes"][tribe][player]["info"]
+                try:
+                    score = self.all_info["tribes"][tribe][player]["points"]
+                    print "\t%-18s:\t%s\t%s" % (player, score, info)
+                except KeyError:
+                    print "\t%s:\t%s" % (player, info)
+                    exit(0)
+        raw_input()
+
+    def option_sp(self):  # see ordered by points
+        for tribe in self.all_info["tribes"]:
+            print "\n%s:" % tribe
+            # print sorted(self.all_info["tribes"][tribe].items(),key=lambda x:x[1]['points'])
+            for player in reversed(sorted(self.all_info["tribes"][tribe].items(),key=lambda x:int(x[1]['points']))):
+                print "\t%-18s %s %s" % (player[0], player[1]["points"], player[1]["info"])
         raw_input()
 
     def option_sf(self):
@@ -92,15 +136,19 @@ class Run(object):
         for tribe in self.all_info["tribes"]:
             print "\n[ally]{}[/ally]:".format(tribe)
             for player in sorted(self.all_info["tribes"][tribe], key=lambda s: s.lower()):
-                info = self.all_info["tribes"][tribe][player]
-                print "[player]{}[/player]:\t{}".format(player, info)
+                info = self.all_info["tribes"][tribe][player]["info"]
+                print " - [player]%s[/player]:\t%s" % (player, info)
+        raw_input()
+
+    def option_sd(self):  # see all_info dictionary
+        print self.all_info
         raw_input()
 
     def option_sq(self):  # see quit
         self.print_menu()
 
     def option_s(self):
-        self.print_menu(["alphabetical", "points", "forum", "quit"], "s")
+        self.print_menu(["alphabetical", "points", "forum", "dictionary", "quit"], "s")
 
     def option_at(self):  # at = add tribe
         tribe = raw_input("\n\nwhich tribe you wanna add?  ").decode(sys.stdin.encoding)
@@ -130,30 +178,51 @@ class Run(object):
                     self.add_new_tribe(tribe)
                     self.add_new_player(player, tribe)
             else:
-                print self.all_info
                 self.add_new_player(player, tribe)
+        # print self.all_info["tribes"]
+        # exit(0)
+        player_info = raw_input("\n\ninfo?  ").decode(sys.stdin.encoding)
+        self.all_info["tribes"][tribe][player]["info"] = player_info
+        player_id = raw_input("\n\nid?  ").decode(sys.stdin.encoding)
+        self.all_info["tribes"][tribe][player]["id"] = player_id
+        self.all_info["tribes"][tribe][player]["score"] = self.update_score(player_id)
+
+
+
+    def option_ai(self):
+        player = raw_input("\n\nwhat is the name of that player?  ").decode(sys.stdin.encoding)
+        tribe = self.find_tribe(player)
+        if tribe == False:
+            print "that player don't exist"
+            return
+        player_id = raw_input("\n\nwhat is the id of that player?  ").decode(sys.stdin.encoding)
+        try:
+            player_id = int(player_id)
+        except ValueError:
+            print "please insert a number"
+            return
+        self.all_info["tribes"][tribe][player]["id"] = player_id
 
     def option_aq(self):
         self.print_menu()
 
     def option_a(self):
-        self.print_menu(["tribe", "player", "quit"], "a")
+        self.print_menu(["tribe", "player", "id of the player", "quit"], "a")
 
-    def option_mt(self):  # modify tribe
+    def option_ut(self):  # updates the tribe name
         tribe = raw_input("\n\nwhich tribe?  ").decode(sys.stdin.encoding)
         new_tribe_name = raw_input("new tribe name?  ").decode(sys.stdin.encoding)
-        self.modify_tribe(tribe=tribe, new_tribe_name=new_tribe_name)
+        self.update_tribe(tribe=tribe, new_tribe_name=new_tribe_name)
 
-    def option_mc(self):  # change player tribe
+    def option_uc(self):  # change player tribe
         player = raw_input("\n\nwhich player?  ").decode(sys.stdin.encoding)
         current_tribe = self.find_tribe(player)
         if not current_tribe:
             print "\nthe player {} don't exist".format(player)
             time.sleep(3)
             return
-        try:
-            new_tribe = raw_input("\n\nwhich new tribe?  ").decode(sys.stdin.encoding)
-        except KeyError:
+        new_tribe = raw_input("\n\nwhich new tribe?  ").decode(sys.stdin.encoding)
+        if not self.check_if_the_tribe_exist(new_tribe):
             print "\nthe tribe {} don't exist".format(new_tribe)
             time.sleep(3)
             return
@@ -162,24 +231,27 @@ class Run(object):
         self.delete_player(player)
         self.add_new_player(player, new_tribe)
 
-    def option_mi(self):  # ai = modify info
+    def option_ui(self):  # ui = update info
         player = raw_input("\n\nwhich player you wanna modify some info?  ").decode(sys.stdin.encoding)
         player_tribe = self.find_tribe(player)
         if player_tribe or player_tribe == "":
             print "current info of player {}: {}".format(
                 player, self.all_info["tribes"][player_tribe][player])
             player_info = raw_input("\n\nwhich info you wanna modify?  ").decode(sys.stdin.encoding)
-            self.all_info["tribes"][player_tribe][player] = player_info
+            self.all_info["tribes"][player_tribe][player]["info"] = player_info
             self.save_file()
         else:
             print "player {} don't exists".format(player)
             time.sleep(2)
 
-    def option_mq(self):
+    def option_us(self):  # update score (points)
+        self.update_all_scores()
+
+    def option_uq(self):  # quit update menu
         self.print_menu()
 
-    def option_m(self):
-        self.print_menu(["tribe", "player", "change tribe", "info", "quit"], "m")
+    def option_u(self):
+        self.print_menu(["tribe", "player", "change tribe", "info", "score", "quit"], "u")
 
     def option_dt(self):  # dt = delete tribe
         tribe = raw_input("which tribe you wanna delete?  ")
@@ -198,7 +270,7 @@ class Run(object):
     def option_q(self):
         sys.exit(0)
 
-    def print_menu(self, options=["see", "add", "modify", "delete", "quit"], first_option=""):
+    def print_menu(self, options=["see", "add", "update", "delete", "quit"], first_option=""):
         while True:
             menu = "\n"
             for option in options:
