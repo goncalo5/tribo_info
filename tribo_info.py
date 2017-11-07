@@ -52,34 +52,94 @@ class Run(object):
     def add_new_player(self, new_player_name, tribe):
         self.all_info["tribes"][tribe][new_player_name] = {"info": "", "id": "", "score": ""}
 
-    def update_tribe(self, tribe, new_tribe_name):
+    def change_tribe_name(self, tribe, new_tribe_name):
         self.all_info["tribes"][new_tribe_name] = self.all_info["tribes"][tribe]
         del self.all_info["tribes"][tribe]
 
-    def update_score(self, player_name, tribe):
+    def update_tribe(self, tribe):
+        print "update_tribe(%s)" % tribe
+        url = 'http://pt.twstats.com/index.php?page=search&name=%s&type=tribe' % tribe
+        sock = urllib.urlopen(url)
+        r = sock.read()
+        sock.close()
+        # print r
+        pat = re.compile('id=([0-9]+)\"')
+        id_tribe = pat.findall(r)
+        print 1, id_tribe
+        id_tribe = id_tribe[0]
+        id_tribe = int(id_tribe)
+        # print li
+        # id_tribe = int(li[0])
+        print id_tribe
+
+        url = 'http://pt.twstats.com/pt57/index.php?page=tribe&id=%s' % id_tribe
+        sock = urllib.urlopen(url)
+        r = sock.read()
+        sock.close()
+        # print r
+        pat = re.compile('([0-9,]+) score')
+        OD = pat.findall(r)
+        print OD
+        pat = re.compile('>Pontos:</th><td>([0-9,]+)')
+        points = pat.findall(r)[0].replace(",", "")
+        print points
+
+        url = 'http://pt.twstats.com/pt57/index.php?page=tribe&mode=members&id=%s' % id_tribe
+        sock = urllib.urlopen(url)
+        r = sock.read()
+        sock.close()
+        # print r
+        pat = re.compile('playerlink.*>(.+)</a>')
+        members_list = pat.findall(r)
+        return members_list
+
+    def update_player_score(self, player_name, tribe):
+        print "update_player_score()"
         pat = '<td><span class="world">PT57</span></td>\n<td>(.*)</td>\n.*id=(.*)".*\n<td>(.*)</td>\n<td>(.*)</td>.*'
         url = 'http://pt.twstats.com/index.php?page=search&name={}&type=player'.format(player_name)
         sock = urllib.urlopen(url)
         # print sock
         # print re.search(pat, sock.read()).group()
-        sock = urllib.urlopen(url)
-        position, id_player, points, n_villages = re.search(pat, sock.read()).groups()
+        sock_readed = sock.read()
+        position, player_id, points, n_villages = re.search(pat, sock_readed).groups()
         sock = urllib.urlopen(url)
         sock.close()
         self.all_info["tribes"][tribe][player_name]["position"] = position
-        self.all_info["tribes"][tribe][player_name]["id"] = id_player
+        self.all_info["tribes"][tribe][player_name]["id"] = player_id
         self.all_info["tribes"][tribe][player_name]["points"] = int(points.replace(",", ""))
+        print "ok1"
         # self.all_info["tribes"][tribe][player_name]["n_villages"] = n_villages
-        print "ok"
+        # world, player_id = 57, 2502598
+        pat = 'xx-small">\((.*) score.*xx-small">\((.*) score.*.*xx-small">\((.*) score.*.*xx-small">\((.*) score.*'
+        url = 'http://pt.twstats.com/pt{}/index.php?page=player&id={}'.format(world, player_id)
+        # print url
+        sock = urllib.urlopen(url)
+        sock_readed = sock.read()
+        pat = 'xx-small">\((.*) score.*xx-small">\((.*) score.*.*xx-small">\((.*) score'
+        OD = re.search(pat, sock_readed).groups()
+        print OD
+        OD, OD_ofensivo, OD_defensivo = OD
+        OD, OD_ofensivo, OD_defensivo = int(OD.replace(",", "")), int(OD_ofensivo.replace(",", "")), int(OD_defensivo.replace(",", ""))
+        OD_apoios = OD - OD_ofensivo - OD_defensivo
+        self.all_info["tribes"][tribe][player_name]["OD"] = OD
+        self.all_info["tribes"][tribe][player_name]["OD_ofensivo"] = OD_ofensivo
+        self.all_info["tribes"][tribe][player_name]["OD_defensivo"] = OD_defensivo
+        self.all_info["tribes"][tribe][player_name]["OD_apoios"] = OD_apoios
+        sock.close()
+        print "ok2"
         self.save_file()
 
     def update_all_scores(self):
         for tribe in self.all_info["tribes"]:
             print tribe
-            for player in self.all_info["tribes"][tribe]:
+            if tribe == "":
+                continue
+            members_list = self.update_tribe(tribe)
+            # exit(0)
+            for player in members_list:
                 print player
                 try:
-                    self.update_score(player, tribe)
+                    self.update_player_score(player, tribe)
                 except Exception as e:
                     print e
                     exit(0)
@@ -113,31 +173,44 @@ class Run(object):
         # print self.all_info
         for tribe in self.all_info["tribes"]:
             print "\n{}:".format(tribe)
+            print "\t%-18s%7s%7s%7s%7s%7s %s" % ("player", "points", "OD", "ODO", "ODD", "ODA", "info")
             for player in sorted(self.all_info["tribes"][tribe], key=lambda s: s.lower()):
                 info = self.all_info["tribes"][tribe][player]["info"]
+                OD = self.all_info["tribes"][tribe][player]["OD"]
+                OD_ofensivo = self.all_info["tribes"][tribe][player]["OD_ofensivo"]
+                OD_defensivo = self.all_info["tribes"][tribe][player]["OD_defensivo"]
+                OD_apoios = self.all_info["tribes"][tribe][player]["OD_apoios"]
                 try:
-                    score = self.all_info["tribes"][tribe][player]["points"]
-                    print "\t%-18s:\t%s\t%s" % (player, score, info)
+                    points = self.all_info["tribes"][tribe][player]["points"]
+                    print "\t%-18s%7s%7s%7s%7s%7s %s" % (player, points, OD, OD_ofensivo, OD_defensivo, OD_apoios, info)
                 except KeyError:
-                    print "\t%s:\t%s" % (player, info)
+                    print "\t%s\t%s" % (player, info)
                     exit(0)
         raw_input()
 
     def option_sp(self):  # see ordered by points
         for tribe in self.all_info["tribes"]:
             print "\n%s:" % tribe
+            print "\t%-18s%7s%7s%7s%7s%7s %s" % ("player", "points", "OD", "ODO", "ODD", "ODA", "info")
             # print sorted(self.all_info["tribes"][tribe].items(),key=lambda x:x[1]['points'])
             for player in reversed(sorted(self.all_info["tribes"][tribe].items(),key=lambda x:int(x[1]['points']))):
-                print "\t%-18s %s %s" % (player[0], player[1]["points"], player[1]["info"])
+                # print player[1]
+                print "\t%-18s%7s%7s%7s%7s%7s %s" % (player[0], player[1]["points"], player[1]["OD"], player[1]["OD_ofensivo"], player[1]["OD_defensivo"], player[1]["OD_apoios"], player[1]["info"])
         raw_input()
 
     def option_sf(self):
         # print self.all_info
         for tribe in self.all_info["tribes"]:
             print "\n[ally]{}[/ally]:".format(tribe)
+            print "%-40s%7s%7s%7s%7s%7s %s" % ("player", "points", "OD", "ODO", "ODD", "ODA", "info")
             for player in sorted(self.all_info["tribes"][tribe], key=lambda s: s.lower()):
                 info = self.all_info["tribes"][tribe][player]["info"]
-                print " - [player]%s[/player]:\t%s" % (player, info)
+                points = self.all_info["tribes"][tribe][player]["points"]
+                OD = self.all_info["tribes"][tribe][player]["OD"]
+                ODO = self.all_info["tribes"][tribe][player]["OD_ofensivo"]
+                ODD = self.all_info["tribes"][tribe][player]["OD_defensivo"]
+                ODA = self.all_info["tribes"][tribe][player]["OD_apoios"]
+                print "%-40s%7s%7s%7s%7s%7s %s" % (" - [player]" + player + "[/player]:", points, OD, ODO, ODD, ODA, info)
         raw_input()
 
     def option_sd(self):  # see all_info dictionary
@@ -185,7 +258,7 @@ class Run(object):
         self.all_info["tribes"][tribe][player]["info"] = player_info
         player_id = raw_input("\n\nid?  ").decode(sys.stdin.encoding)
         self.all_info["tribes"][tribe][player]["id"] = player_id
-        self.all_info["tribes"][tribe][player]["score"] = self.update_score(player_id)
+        self.all_info["tribes"][tribe][player]["points"] = self.update_player_score(player_id)
 
 
 
@@ -212,7 +285,7 @@ class Run(object):
     def option_ut(self):  # updates the tribe name
         tribe = raw_input("\n\nwhich tribe?  ").decode(sys.stdin.encoding)
         new_tribe_name = raw_input("new tribe name?  ").decode(sys.stdin.encoding)
-        self.update_tribe(tribe=tribe, new_tribe_name=new_tribe_name)
+        self.change_tribe_name(tribe=tribe, new_tribe_name=new_tribe_name)
 
     def option_uc(self):  # change player tribe
         player = raw_input("\n\nwhich player?  ").decode(sys.stdin.encoding)
