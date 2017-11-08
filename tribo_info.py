@@ -58,6 +58,11 @@ class Run(object):
         self.all_info["tribes"][new_tribe_name] = self.all_info["tribes"][tribe]
         del self.all_info["tribes"][tribe]
 
+    def change_player_name(self, player_name, new_player_name):
+        tribe = self.find_tribe(player_name)
+        self.all_info["tribes"][tribe]["members_list"][new_player_name] = self.all_info["tribes"][tribe]["members_list"][player_name]
+        del self.all_info["tribes"][tribe]["members_list"][player_name]
+
     def update_tribe(self, tribe):
         print "update_tribe(%s)" % tribe
         url = 'http://pt.twstats.com/index.php?page=search&name=%s&type=tribe' % tribe
@@ -109,7 +114,7 @@ class Run(object):
         sock = urllib.urlopen(url)
         sock_readed = sock.read()
         sock.close()
-        pat = '<td><span class="world">PT%s</span></td>\n<td>(.*)</td>\n.*id=(.*)".*\n<td>(.*)</td>\n<td>(.*)</td>.*' % world
+        pat = '<td><span class="world">PT%s</span></td>\n<td>(.*)</td>\n.*id=(.*)".*\n<td>(.*)<.*\n.*>(.*)<.*' % world
         position, player_id, points, n_villages = re.search(pat, sock_readed).groups()
         self.all_info["tribes"][tribe]["members_list"][player_name]["position"] = position
         self.all_info["tribes"][tribe]["members_list"][player_name]["id"] = player_id
@@ -183,8 +188,9 @@ class Run(object):
         ODO = "%7s" % "OD_ofensivo"
         ODD = "%7s" % "OD_defensivo"
         ODA = "%7s" % "OD_apoios"
-        info = "%7s" % "info"
-        exec "print \t%s" % print_order
+        info = "%s" % "info"
+        # print "\t",
+        exec "print %s" % print_order
 
     def print_player_infos(self, player_name, player_dict):
         player = player_name
@@ -201,14 +207,26 @@ class Run(object):
         ODO = "%7s" % OD_ofensivo
         ODD = "%7s" % OD_defensivo
         ODA = "%7s" % OD_apoios
-        info = "%7s" % info
-        exec "print \t%s" % print_order
+        info = "%s" % info
+        # print "\t",
+        exec "print %s" % print_order
 
     def option_sa(self):  # see alphabetical ordered
         # print self.all_info
         for tribe in self.all_info["tribes"]:
             print "\n{}:".format(tribe)
             self.print_head()
+            # print self.all_info["tribes"][tribe]["members_list"]
+            try:
+                sorted(self.all_info["tribes"][tribe]["members_list"], key=lambda s: s.lower())
+            except:
+                for player in self.all_info["tribes"][tribe]["members_list"]:
+                    exec "new_player_name = u'%s'" % player
+                    if isinstance(player, str):
+                        print type(new_player_name), new_player_name
+                        self.change_player_name(player, new_player_name)
+                        break
+            # exit(0)
             for player in sorted(self.all_info["tribes"][tribe]["members_list"], key=lambda s: s.lower()):
                 self.print_player_infos(player, self.all_info["tribes"][tribe]["members_list"][player])
         raw_input()
@@ -338,9 +356,10 @@ class Run(object):
         player_tribe = self.find_tribe(player)
         if player_tribe or player_tribe == "":
             print "current info of player {}: {}".format(
-                player, self.all_info["tribes"][player_tribe][player])
+                player, self.all_info["tribes"][player_tribe]["members_list"][player]["info"])
             player_info = raw_input("\n\nwhich info you wanna modify?  ").decode(sys.stdin.encoding)
-            self.all_info["tribes"][player_tribe][player]["info"] = player_info
+            print player_info
+            self.all_info["tribes"][player_tribe]["members_list"][player]["info"] = player_info
             self.save_file()
         else:
             print "player {} don't exists".format(player)
@@ -402,13 +421,13 @@ class Run(object):
 if __name__ == '__main__':
     Run()
 
-print_menu()
-exit(0)
-f = open(file_name, "w")
-json.dump(d, f)
+# print_menu()
+# exit(0)
+# f = open(file_name, "w")
+# json.dump(d, f)
 
-f = open(file_name, "r")
-a = json.load(f)
+# f = open(file_name, "r")
+# a = json.load(f)
 
 
-print a
+# print a
